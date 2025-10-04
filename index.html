@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Browser</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+        .tab { transition: all 0.2s; }
+        .tab:hover { background: #e5e7eb; }
+        .tab.active { background: white; border-top: 1px solid #d1d5db; border-left: 1px solid #d1d5db; border-right: 1px solid #d1d5db; }
+        .spinner { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-white">
+    <div id="app" class="flex flex-col h-screen">
+        <!-- Tab Bar -->
+        <div class="flex items-end bg-gray-100 px-2 pt-2 border-b border-gray-300">
+            <div id="tabs-container" class="flex flex-1 overflow-x-auto"></div>
+            <button id="new-tab" class="p-2 hover:bg-gray-200 rounded-full mb-1">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Address Bar -->
+        <div class="flex items-center gap-2 p-2 bg-white border-b border-gray-200">
+            <button id="back-btn" class="p-2 rounded-full hover:bg-gray-100 disabled:opacity-30">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                </svg>
+            </button>
+            <button id="forward-btn" class="p-2 rounded-full hover:bg-gray-100 disabled:opacity-30">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                </svg>
+            </button>
+            <button id="reload-btn" class="p-2 rounded-full hover:bg-gray-100">
+                <svg id="reload-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+            </button>
+            <button id="home-btn" class="p-2 rounded-full hover:bg-gray-100">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
+                </svg>
+            </button>
+
+            <div class="flex-1 flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-full hover:bg-gray-200 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-500">
+                <svg id="url-icon" class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input id="url-input" type="text" placeholder="Search or enter URL" class="flex-1 bg-transparent outline-none text-sm"/>
+            </div>
+
+            <select id="search-engine" class="px-3 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200 outline-none">
+                <option value="duckduckgo">DuckDuckGo</option>
+                <option value="google">Google</option>
+                <option value="bing">Bing</option>
+            </select>
+        </div>
+
+        <!-- Content Area -->
+        <div id="content-area" class="flex-1 bg-white overflow-hidden"></div>
+    </div>
+
+    <script>
+        var SEARCH_ENGINES = {
+            google: 'https://www.google.com/search?q=',
+            duckduckgo: 'https://duckduckgo.com/?q=',
+            bing: 'https://www.bing.com/search?q='
+        };
+
+        var API_URL = '/api/proxy';
+
+        var tabs = [];
+        var activeTabId = null;
+        var tabIdCounter = 1;
+
+        function isUrl(str) {
+            try {
+                new URL(str.startsWith('http') ? str : 'https://' + str);
+                return str.includes('.');
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function fetchPage(url) {
+            return fetch(API_URL + '?url=' + encodeURIComponent(url))
+                .then(function(response) {
+                    return response.json().then(function(data) {
+                        if (!response.ok) {
+                            return '<html><body style="font-family: Arial; padding: 40px; text-align: center;"><h2>Unable to load page</h2><p>' + (data.error || 'Failed to fetch the page') + '</p><p style="color: #666;">URL: ' + url + '</p></body></html>';
+                        }
+                        
+                        var html = data.content;
+                        var baseTag = '<base href="' + url + '">';
+                        html = html.replace(/<head>/i, '<head>' + baseTag);
+                        return html;
+                    });
+                })
+                .catch(function(error) {
+                    return '<html><body style="font-family: Arial; padding: 40px; text-align: center;"><h2>Connection Error</h2><p>Could not connect to the proxy server.</p><p style="color: #666;">Make sure your backend API is running.</p><p style="color: #999; font-size: 12px;">' + error.message + '</p></body></html>';
+                });
+        }
+
+        function getActiveTab() {
+            return tabs.find(function(t) { return t.id === activeTabId; });
+        }
+
+        function updateUI() {
+            var tab = getActiveTab();
+            
+            var container = document.getElementById('tabs-container');
+            container.innerHTML = tabs.map(function(t) {
+                return '<div class="tab flex items-center gap-2 px-4 py-2 min-w-[200px] max-w-[240px] rounded-t-lg cursor-pointer ' + (t.id === activeTabId ? 'active' : '') + '" data-tab-id="' + t.id + '"><svg class="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><span class="flex-1 truncate text-sm">' + (t.loading ? 'Loading...' : t.title) + '</span>' + (tabs.length > 1 ? '<svg class="close-tab w-4 h-4 hover:bg-gray-300 rounded" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>' : '') + '</div>';
+            }).join('');
+
+            document.getElementById('back-btn').disabled = !tab || tab.historyIndex <= 0;
+            document.getElementById('forward-btn').disabled = !tab || tab.historyIndex >= tab.history.length - 1;
+            document.getElementById('url-input').value = tab ? tab.url : '';
+            
+            var urlIcon = document.getElementById('url-icon');
+            urlIcon.innerHTML = tab && tab.url ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>' : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>';
+            
+            var reloadIcon = document.getElementById('reload-icon');
+            if (tab && tab.loading) {
+                reloadIcon.classList.add('spinner');
+            } else {
+                reloadIcon.classList.remove('spinner');
+            }
+
+            var contentArea = document.getElementById('content-area');
+            if (tab && tab.content) {
+                contentArea.innerHTML = '<iframe class="w-full h-full border-none" sandbox="allow-same-origin allow-scripts allow-forms allow-popups" srcdoc="' + tab.content.replace(/"/g, '&quot;') + '"></iframe>';
+            } else {
+                contentArea.innerHTML = '<div class="flex items-center justify-center h-full bg-gray-50"><div class="text-center"><svg class="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><h2 class="text-2xl font-semibold text-gray-700 mb-2">New Tab</h2><p class="text-gray-500">Search or enter a URL to get started</p></div></div>';
+            }
+        }
+
+        function navigate(urlOrQuery) {
+            var tab = getActiveTab();
+            var searchEngine = document.getElementById('search-engine').value;
+            
+            var finalUrl;
+            if (isUrl(urlOrQuery)) {
+                finalUrl = urlOrQuery.startsWith('http') ? urlOrQuery : 'https://' + urlOrQuery;
+            } else {
+                finalUrl = SEARCH_ENGINES[searchEngine] + encodeURIComponent(urlOrQuery);
+            }
+
+            var newHistory = tab.history.slice(0, tab.historyIndex + 1);
+            newHistory.push(finalUrl);
+            
+            tab.url = finalUrl;
+            tab.loading = true;
+            tab.history = newHistory;
+            tab.historyIndex = newHistory.length - 1;
+            tab.title = 'Loading...';
+            
+            updateUI();
+
+            fetchPage(finalUrl).then(function(content) {
+                var titleMatch = content.match(/<title>(.*?)<\/title>/i);
+                var title = titleMatch ? titleMatch[1] : new URL(finalUrl).hostname;
+                
+                tab.content = content;
+                tab.loading = false;
+                tab.title = title;
+                
+                updateUI();
+            });
+        }
+
+        function addTab() {
+            var newTab = {
+                id: tabIdCounter++,
+                title: 'New Tab',
+                url: '',
+                content: null,
+                loading: false,
+                history: [],
+                historyIndex: -1
+            };
+            tabs.push(newTab);
+            activeTabId = newTab.id;
+            updateUI();
+        }
+
+        function closeTab(id) {
+            if (tabs.length === 1) return;
+            
+            tabs = tabs.filter(function(t) { return t.id !== id; });
+            
+            if (activeTabId === id) {
+                activeTabId = tabs[0].id;
+            }
+            
+            updateUI();
+        }
+
+        function goBack() {
+            var tab = getActiveTab();
+            if (tab.historyIndex > 0) {
+                tab.historyIndex--;
+                tab.url = tab.history[tab.historyIndex];
+                tab.loading = true;
+                updateUI();
+
+                fetchPage(tab.url).then(function(content) {
+                    var titleMatch = content.match(/<title>(.*?)<\/title>/i);
+                    var title = titleMatch ? titleMatch[1] : new URL(tab.url).hostname;
+                    tab.content = content;
+                    tab.loading = false;
+                    tab.title = title;
+                    updateUI();
+                });
+            }
+        }
+
+        function goForward() {
+            var tab = getActiveTab();
+            if (tab.historyIndex < tab.history.length - 1) {
+                tab.historyIndex++;
+                tab.url = tab.history[tab.historyIndex];
+                tab.loading = true;
+                updateUI();
+
+                fetchPage(tab.url).then(function(content) {
+                    var titleMatch = content.match(/<title>(.*?)<\/title>/i);
+                    var title = titleMatch ? titleMatch[1] : new URL(tab.url).hostname;
+                    tab.content = content;
+                    tab.loading = false;
+                    tab.title = title;
+                    updateUI();
+                });
+            }
+        }
+
+        document.getElementById('new-tab').addEventListener('click', addTab);
+        document.getElementById('back-btn').addEventListener('click', goBack);
+        document.getElementById('forward-btn').addEventListener('click', goForward);
+        document.getElementById('reload-btn').addEventListener('click', function() {
+            var tab = getActiveTab();
+            if (tab && tab.url) navigate(tab.url);
+        });
+        document.getElementById('home-btn').addEventListener('click', function() {
+            var tab = getActiveTab();
+            tab.url = '';
+            tab.content = null;
+            tab.title = 'New Tab';
+            updateUI();
+        });
+
+        document.getElementById('url-input').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.target.value.trim()) {
+                navigate(e.target.value.trim());
+            }
+        });
+
+        document.getElementById('tabs-container').addEventListener('click', function(e) {
+            var tab = e.target.closest('.tab');
+            if (tab) {
+                if (e.target.closest('.close-tab')) {
+                    closeTab(parseInt(tab.dataset.tabId));
+                } else {
+                    activeTabId = parseInt(tab.dataset.tabId);
+                    updateUI();
+                }
+            }
+        });
+
+        addTab();
+    </script>
+</body>
+</html>
