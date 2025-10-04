@@ -141,7 +141,7 @@
                 var baseUrl = tab.url;
                 var modifiedContent = tab.content.replace(
                     '<head>',
-                    '<head><base href="' + baseUrl + '"><script>try{var h=window.history;delete window.history;window.history={pushState:function(){},replaceState:function(){},back:function(){h.back()},forward:function(){h.forward()},go:function(n){h.go(n)},length:h.length,state:h.state};if(!window.location.origin||window.location.origin==="null"){Object.defineProperty(window.location,"origin",{get:function(){return"' + baseUrl.replace(/\/[^\/]*$/, '') + '"},configurable:true});Object.defineProperty(window.location,"href",{get:function(){return"' + baseUrl + '"},configurable:true})}}catch(e){}<\/script>'
+                    '<head><base href="' + baseUrl + '"><script>try{var h=window.history;delete window.history;window.history={pushState:function(){},replaceState:function(){},back:function(){h.back()},forward:function(){h.forward()},go:function(n){h.go(n)},length:h.length,state:h.state};if(!window.location.origin||window.location.origin==="null"){Object.defineProperty(window.location,"origin",{get:function(){return"' + baseUrl.replace(/\/[^\/]*$/, '') + '"},configurable:true});Object.defineProperty(window.location,"href",{get:function(){return"' + baseUrl + '"},configurable:true})};window.addEventListener("error",function(e){console.warn("Suppressed error:",e.message)},true)}catch(e){}<\/script>'
                 );
                 contentArea.innerHTML = '<iframe class="w-full h-full border-none" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox" srcdoc="' + modifiedContent.replace(/"/g, '&quot;').replace(/\$/g, '&#36;') + '"></iframe>';
             } else {
